@@ -96,8 +96,29 @@ Model: `browser.model`. Row counts (header line excluded, counted with `tail -n 
 
 ### B2. Transfer models
 
-TODO: model files (transfer-nc, transfer, transfer-neg), comparison table (rows, happy-path rows, errors per row), whether the A2 constraints are still needed with `~`, 3 real test cases (setup + input + oracle).
+Models: `transfer-nc.model` (no constraints), `transfer.model` (A2 constraints written as IF ... THEN), `transfer-neg.model` (`~` on the [ERROR] values). Counts come from `results/transfer-nc.txt`, `results/transfer.txt` and `results/transfer-neg.txt` (header excluded). An error is counted per row when from is not Valid, to is not Valid, amount is Zero/Negative/OverBalance/OverLimit, or the daily limit is AlmostFull.
+
+| Version | File | Rows | Happy-path rows | Rows with 1 / 2 / 3 / 4 errors | Max errors per row |
+|---|---|---|---|---|---|
+| No constraints | results/transfer-nc.txt | 18 | 0 | 3 / 6 / 7 / 2 | 4 |
+| A2 constraints | results/transfer.txt | 19 | 1 | 18 / 0 / 0 / 0 | 1 |
+| `~` negative values | results/transfer-neg.txt | 22 | 3 | 19 / 0 / 0 / 0 | 1 |
+
+**Reading the output.** Without constraints there is no happy-path row, and 15 of 18 rows contain two or more errors at once. In those rows the first error in my priority order (from -> to -> amount) hides the others, so a row such as Missing + Zero + OverLimit checks only ERROR_NO_FROM and says nothing about the amount rules. Both the constraint version and the `~` version give at most one error per row, so every error is tested alone.
+
+**Are the A2 constraints still needed with `~`?** Partly. `~` already solves error masking, which was the main job of my [ERROR] constraints, and it also removes combinations such as from = Missing with to = SameAsFrom. It does not remove combinations that are valid in PICT's eyes but meaningless in my design. `ExactLimit` (500) is a boundary value only with the same currency and an empty daily limit: 500 EUR is 600 USD, which is over the limit, and 500 plus 450 already used is also over the limit. So I kept one constraint in `transfer-neg.model` for ExactLimit. `~` replaces the [ERROR] tag, but not the [SINGLE] and [IF] tags.
+
+**Real test cases.** Common setup: account A (USD, balance 1000, daily limit 500, nothing transferred today), account B (USD, balance 0, active), account F (USD, frozen). Fixed rate 1 EUR = 1.2 USD. Input errors return HTTP 200 with an ERROR result.
+
+| # | Source row | Setup | Input body | Oracle |
+|---|---|---|---|---|
+| T1 (happy path) | `transfer-neg.txt` line 2: Valid, Valid, Normal, Same, Empty | A and B as above | `{"from":"A","to":"B","amount":100,"currency":"USD"}` | 201, `{"result":"OK"}` |
+| T2 (one error) | `transfer-neg.txt` line 7: Valid, Valid, ~OverBalance, Same, Empty | A and B as above | `{"from":"A","to":"B","amount":2000,"currency":"USD"}` | 200, `{"result":"ERROR_INSUFFICIENT"}` (2000 > balance 1000) |
+| T3 (one error) | `transfer-neg.txt` line 13: Valid, ~SameAsFrom, Normal, Different, Empty | A as above | `{"from":"A","to":"A","amount":100,"currency":"EUR"}` | 200, `{"result":"ERROR_SAME_ACCOUNT"}` |
+| T4 (multi-error) | `transfer-nc.txt` line 7: Frozen, SameAsFrom, Zero, Same, AlmostFull | F is frozen, 450 already transferred today | `{"from":"F","to":"F","amount":0,"currency":"USD"}` | 200, `{"result":"ERROR_FROZEN"}` |
+
+T4 has four errors at once (frozen, same account, bad amount, and a limit problem). By my priority order from -> to -> amount, the from check comes first, so the oracle is ERROR_FROZEN. This row only checks that ordering and says nothing about the other three errors.
 
 ### B3. Conclusion
 
-TODO: 8-10 sentences comparing the manual table with PICT output.
+Manual category-partition produced 15 specifications (216 -> 12 plus 3 extra cases), and every row has an expected result written next to it. PICT produced 19 rows with hand-written constraints and 22 rows with `~`, but its output has no expected results, so I had to add the oracle for every row myself. The manual table captures error semantics better: each error class has its own row, and my priority order decides the double-condition rows. The `~` model comes close, because it limits each row to one error, but PICT still does not know which ERROR_ code should be returned. PICT guarantees pairwise coverage for the values I give it, and my manual table does not: for example, I never checked every pair of currency and from. With `~`, the pair coverage of error values with each other is deliberately dropped, so the guarantee holds only for pairs of normal values and for each error with the normal values. The unconstrained model showed why constraints matter: it had no happy-path row and 15 of 18 rows had two or more errors. PICT is also greedy, so it gave 10 rows for the browser model where 9 are enough, and its sets are not always minimal. The manual work and PICT complement each other: PICT is faster and systematic, the manual design gives meaning to the tests. The step that needed the most thinking was A2, deciding which values are [ERROR], [SINGLE] or [IF] and the priority order, because the PICT models and the oracles all depend on it.
