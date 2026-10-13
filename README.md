@@ -1,124 +1,124 @@
-# Lab 6: Category-Partition and PICT
+# Лаб 6: Category-Partition ба PICT
 
-**Name:** Nomunzaya
-**Student code:** B232270804
+**Нэр:** Nomunzaya
+**Оюутны код:** B232270804
 
-## Part A: Category-Partition (POST /transfer)
+## Хэсэг A: Category-Partition (POST /transfer)
 
-### Test assumptions (setup used for all values below)
+### Тестийн нөхцөл (доорх бүх утгад ашигласан setup)
 
-- Source account A: currency USD, balance 1000, daily limit 500, no transfers made today (unless stated).
-- Fixed test exchange rate: 1 EUR = 1.2 USD.
-- Balance and daily limit are checked **after** converting the amount to the account currency.
+- Эх данс A: валют USD, үлдэгдэл 1000, өдрийн лимит 500, өнөөдөр шилжүүлэг хийгээгүй (өөрөөр заагаагүй бол).
+- Тогтмол ханш: 1 EUR = 1.2 USD.
+- Үлдэгдэл ба өдрийн лимитийг дүнг дансны валют руу **хөрвүүлсний дараа** шалгана.
 
-### Priority order for multiple errors
+### Олон алдааны давуу эрэмбэ
 
-The spec does not say which error wins when several apply, so I chose: **from -> to -> amount**, and inside amount: **BAD_AMOUNT -> INSUFFICIENT -> LIMIT**. I chose it because an account must exist and be usable before a transfer to or from it means anything, and the amount checks follow the order the rules are listed in. An amount over the balance also exceeds the daily limit here (limit 500 < balance 1000), so INSUFFICIENT must take priority over LIMIT.
+Тодорхойлолтод хэд хэдэн алдаа зэрэг байвал аль нь буцахыг заагаагүй тул би **from -> to -> amount** гэж тогтоосон бөгөөд amount дотор **BAD_AMOUNT -> INSUFFICIENT -> LIMIT** гэж эрэмбэлсэн. Шалтгаан: шилжүүлгийн оролцогч данс байх, ашиглах боломжтой байх нь дүнгийн шалгалтаас өмнө утга учиртай болдог, дүнгийн шалгалтууд нь дүрмийн жагсаалтын дарааллаар явдаг. Энд лимит 500 < үлдэгдэл 1000 тул үлдэгдлээс хэтэрсэн дүн лимитээс бас хэтэрдэг, иймээс INSUFFICIENT нь LIMIT-ээс түрүүлнэ.
 
-### A1. Choices and representative values
+### A1. Сонголт ба төлөөлөх утгууд
 
-| Parameter | Choice | Representative value |
+| Параметр | Сонголт | Төлөөлөх утга |
 |---|---|---|
-| from | valid account | existing, not frozen (account A) |
-| from | frozen | existing account, frozen |
-| from | missing | id that does not exist |
-| to | valid account | existing account B, different from A |
-| to | missing | id that does not exist |
-| to | same as from | to = account A |
-| amount | normal | 100 |
-| amount | exactly the daily limit | 500 |
-| amount | zero | 0 |
-| amount | negative | -50 |
-| amount | over balance | 2000 |
-| amount | over daily limit (within balance) | 600 |
-| currency | same as account | USD |
-| currency | different (conversion needed) | EUR |
-| daily limit used (hidden environment) | empty | no transfers today |
-| daily limit used (hidden environment) | almost full | 450 already transferred today |
+| from | хүчинтэй данс | байгаа, царцаагдаагүй (данс A) |
+| from | царцаагдсан | байгаа, царцаагдсан данс |
+| from | байхгүй | олдохгүй id |
+| to | хүчинтэй данс | байгаа данс B, A-аас өөр |
+| to | байхгүй | олдохгүй id |
+| to | from-той адил | to = данс A |
+| amount | хэвийн | 100 |
+| amount | яг өдрийн лимит | 500 |
+| amount | тэг | 0 |
+| amount | сөрөг | -50 |
+| amount | үлдэгдлээс хэтэрсэн | 2000 |
+| amount | өдрийн лимитээс хэтэрсэн (үлдэгдлийн дотор) | 600 |
+| currency | дансныхтай адил | USD |
+| currency | өөр (хөрвүүлэлт хэрэгтэй) | EUR |
+| өдрийн лимитийн ашиглалт (далд орчин) | хоосон | өнөөдөр шилжүүлэг хийгээгүй |
+| өдрийн лимитийн ашиглалт (далд орчин) | бараг дүүрсэн | өнөөдөр 450 шилжүүлсэн |
 
-### A2. Constraints
+### A2. Хязгаарлалтууд
 
-| Value | Tag | Justification |
+| Утга | Тэмдэглэгээ | Үндэслэл |
 |---|---|---|
-| from = frozen | [ERROR] | Returns ERROR_FROZEN; combining it with other values would hide their errors. |
-| from = missing | [ERROR] | Returns ERROR_NO_FROM, which wins over every later check. |
-| to = missing | [ERROR] | Returns ERROR_NO_TO; tested once with everything else valid. |
-| to = same as from | [ERROR], [IF from exists] | Returns ERROR_SAME_ACCOUNT; "same as from" is meaningless if from does not exist. |
-| amount = zero | [ERROR] | Returns ERROR_BAD_AMOUNT (amount <= 0). |
-| amount = negative | [ERROR] | Same error class as zero; kept as its own value to test the sign. |
-| amount = over balance | [ERROR] | Returns ERROR_INSUFFICIENT. |
-| amount = over daily limit | [ERROR] | Returns ERROR_LIMIT. |
-| daily limit = almost full | [ERROR], [IF amount is positive and within balance] | Returns ERROR_LIMIT even for a normal amount; it only matters if the amount itself is valid. |
-| amount = exactly the daily limit | [SINGLE] | Boundary of "does not exceed the limit"; one test is enough, combining it with other values adds nothing. |
+| from = frozen | [ERROR] | ERROR_FROZEN буцаана; бусад утгатай хосолбол тэдгээрийн алдааг нууна. |
+| from = missing | [ERROR] | ERROR_NO_FROM буцаана, дараагийн бүх шалгалтаас түрүүлнэ. |
+| to = missing | [ERROR] | ERROR_NO_TO буцаана; бусад бүх утгыг хүчинтэй байлгаж нэг удаа тестлэнэ. |
+| to = same as from | [ERROR], [IF from exists] | ERROR_SAME_ACCOUNT буцаана; from байхгүй бол "from-той адил" гэдэг утгагүй. |
+| amount = zero | [ERROR] | ERROR_BAD_AMOUNT буцаана (amount <= 0). |
+| amount = negative | [ERROR] | Тэгтэй ижил алдааны анги; тэмдгийг шалгахын тулд тусдаа утга болгосон. |
+| amount = over balance | [ERROR] | ERROR_INSUFFICIENT буцаана. |
+| amount = over daily limit | [ERROR] | ERROR_LIMIT буцаана. |
+| daily limit = almost full | [ERROR], [IF amount эерэг ба үлдэгдлийн дотор] | Хэвийн дүнтэй ч ERROR_LIMIT буцаана; дүн нь өөрөө хүчинтэй үед л утга учиртай. |
+| amount = яг өдрийн лимит | [SINGLE] | "Лимитээс хэтрэхгүй" гэсний хилийн утга; нэг тест хангалттай, бусад утгатай хосолсноор мэдээлэл нэмэгдэхгүй. |
 
-**Count ("N -> M"):**
+**Тоо ("N -> M"):**
 
-- Full set: from 3 x to 3 x amount 6 x currency 2 x daily limit 2 = **216**
-- After constraints: 2 happy combinations (currency same / different) + 1 SINGLE (exact limit) + 9 ERROR values tested once each = **12**
+- Бүрэн олонлог: from 3 x to 3 x amount 6 x currency 2 x өдрийн лимит 2 = **216**
+- Хязгаарлалтын дараа: 2 happy хослол (currency адил / өөр) + 1 SINGLE (яг лимит) + 9 ERROR утга тус бүр нэг удаа = **12**
 - **216 -> 12**
 
-### A3. Specification table
+### A3. Спецификацийн хүснэгт
 
-| # | from | to | amount | currency | daily limit used | Expected result | Note |
+| # | from | to | amount | currency | лимит ашигласан | Хүлээгдэх үр дүн | Тайлбар |
 |---|---|---|---|---|---|---|---|
-| 1 | valid | valid | normal (100) | same | empty | 201 OK | happy path |
-| 2 | valid | valid | normal (100 EUR) | different | empty | 201 OK | conversion: 120 USD, within balance and limit |
-| 3 | valid | valid | exact limit (500) | same | empty | 201 OK | SINGLE boundary |
-| 4 | missing | valid | normal | same | empty | ERROR_NO_FROM | |
-| 5 | frozen | valid | normal | same | empty | ERROR_FROZEN | |
-| 6 | valid | missing | normal | same | empty | ERROR_NO_TO | |
-| 7 | valid | same as from | normal | same | empty | ERROR_SAME_ACCOUNT | |
-| 8 | valid | valid | zero | same | empty | ERROR_BAD_AMOUNT | |
-| 9 | valid | valid | negative (-50) | same | empty | ERROR_BAD_AMOUNT | |
-| 10 | valid | valid | over balance (2000) | same | empty | ERROR_INSUFFICIENT | also exceeds the limit; INSUFFICIENT wins by my priority order |
-| 11 | valid | valid | over limit (600) | same | empty | ERROR_LIMIT | within balance (1000) |
-| 12 | valid | valid | normal (100) | same | almost full (450 used) | ERROR_LIMIT | environment: 450 + 100 > 500 |
-| 13 | valid | valid | 450 EUR | different | empty | ERROR_LIMIT | interesting: 450 < 500 as written, but 450 EUR = 540 USD after conversion |
-| 14 | frozen | missing | normal | same | empty | ERROR_FROZEN | double condition: from is checked before to |
-| 15 | valid | missing | zero | same | empty | ERROR_NO_TO | double condition: to is checked before amount |
+| 1 | valid | valid | хэвийн (100) | адил | хоосон | 201 OK | happy path |
+| 2 | valid | valid | хэвийн (100 EUR) | өөр | хоосон | 201 OK | хөрвүүлэлт: 120 USD, үлдэгдэл ба лимитийн дотор |
+| 3 | valid | valid | яг лимит (500) | адил | хоосон | 201 OK | SINGLE хилийн утга |
+| 4 | missing | valid | хэвийн | адил | хоосон | ERROR_NO_FROM | |
+| 5 | frozen | valid | хэвийн | адил | хоосон | ERROR_FROZEN | |
+| 6 | valid | missing | хэвийн | адил | хоосон | ERROR_NO_TO | |
+| 7 | valid | from-той адил | хэвийн | адил | хоосон | ERROR_SAME_ACCOUNT | |
+| 8 | valid | valid | тэг | адил | хоосон | ERROR_BAD_AMOUNT | |
+| 9 | valid | valid | сөрөг (-50) | адил | хоосон | ERROR_BAD_AMOUNT | |
+| 10 | valid | valid | үлдэгдлээс хэтэрсэн (2000) | адил | хоосон | ERROR_INSUFFICIENT | лимитээс бас хэтэрнэ; миний давуу эрэмбээр INSUFFICIENT ялна |
+| 11 | valid | valid | лимитээс хэтэрсэн (600) | адил | хоосон | ERROR_LIMIT | үлдэгдлийн (1000) дотор |
+| 12 | valid | valid | хэвийн (100) | адил | бараг дүүрсэн (450) | ERROR_LIMIT | далд орчин: 450 + 100 > 500 |
+| 13 | valid | valid | 450 EUR | өөр | хоосон | ERROR_LIMIT | сонирхолтой: бичсэн дүнгээр 450 < 500, гэвч хөрвүүлсний дараа 450 EUR = 540 USD |
+| 14 | frozen | missing | хэвийн | адил | хоосон | ERROR_FROZEN | давхар нөхцөл: from нь to-оос түрүүлж шалгагдана |
+| 15 | valid | missing | тэг | адил | хоосон | ERROR_NO_TO | давхар нөхцөл: to нь amount-оос түрүүлж шалгагдана |
 
-Rows 1-12 are the 12 tests from the count above. Rows 13-15 are extra interesting cases (conversion effect and double conditions).
+1-12-р мөр нь дээрх тооцооны 12 тест. 13-15-р мөр нь нэмэлт сонирхолтой тохиолдол (хөрвүүлэлтийн нөлөө ба давхар нөхцөл).
 
-## Part B: PICT
+## Хэсэг B: PICT
 
-### B1. Browser model
+### B1. Browser модель
 
-Model: `browser.model`. Row counts (header line excluded, counted with `tail -n +2 ... | wc -l`):
+Модель: `browser.model`. Мөрийн тоо (толгой мөрийг оруулаагүй, `tail -n +2 ... | wc -l`-ээр тоолсон):
 
-| Strength | File | Rows |
+| Эрчим | Файл | Мөр |
 |---|---|---|
 | 2-way | results/browser-2way.txt | 10 |
 | 3-way | results/browser-3way.txt | 20 |
 
-**2-way:** PICT gave 10 rows, one more than the 9 rows found by hand in the lecture. 9 is the minimum possible, because Content and Cookies have 3 values each, so there are 9 distinct pairs and one row covers only one of them. PICT uses a greedy algorithm: at each step it adds the row that covers the most uncovered pairs. That is fast and gives a small set, but a locally best choice does not always lead to the smallest overall set, so PICT does not guarantee the minimum.
+**2-way:** PICT 10 мөр гаргасан нь лекц дээр гараар олсон 9 мөрөөс нэгээр олон. 9 нь хамгийн цөөн боломжит тоо, учир нь Content ба Cookies тус бүр 3 утгатай тул 9 өөр хос байх бөгөөд нэг мөр зөвхөн нэг хосыг хамарна. PICT нь greedy алгоритмтай: алхам бүрт хамгийн олон хамраагүй хосыг хамарсан мөрийг нэмдэг. Энэ нь хурдан бөгөөд цөөн мөртэй олонлог өгдөг ч орон нутгийн хамгийн сайн сонголт нь нийт хамгийн жижиг олонлогт хүргэдэггүй тул PICT хамгийн цөөнийг баталгаажуулдаггүй.
 
-**3-way:** 20 rows, compared with the full set of 3 x 3 x 2 x 2 x 2 x 2 = 144 combinations, which is about 14% of the full set.
+**3-way:** 20 мөр; бүрэн олонлог 3 x 3 x 2 x 2 x 2 x 2 = 144 хослолын ойролцоогоор 14%.
 
-### B2. Transfer models
+### B2. Шилжүүлгийн моделууд
 
-Models: `transfer-nc.model` (no constraints), `transfer.model` (A2 constraints written as IF ... THEN), `transfer-neg.model` (`~` on the [ERROR] values). Counts come from `results/transfer-nc.txt`, `results/transfer.txt` and `results/transfer-neg.txt` (header excluded). An error is counted per row when from is not Valid, to is not Valid, amount is Zero/Negative/OverBalance/OverLimit, or the daily limit is AlmostFull.
+Моделууд: `transfer-nc.model` (хязгаарлалтгүй), `transfer.model` (A2-ын хязгаарлалтыг IF ... THEN-ээр бичсэн), `transfer-neg.model` ([ERROR] утгуудыг `~`-ээр тэмдэглэсэн). Тоо нь `results/transfer-nc.txt`, `results/transfer.txt`, `results/transfer-neg.txt` файлаас (толгой мөргүй). Мөр дэх алдааг дараах байдлаар тоолсон: from нь Valid биш, to нь Valid биш, amount нь Zero/Negative/OverBalance/OverLimit, эсвэл өдрийн лимит AlmostFull.
 
-| Version | File | Rows | Happy-path rows | Rows with 1 / 2 / 3 / 4 errors | Max errors per row |
+| Хувилбар | Файл | Мөр | Happy-path мөр | 1 / 2 / 3 / 4 алдаатай мөр | Нэг мөр дэх дээд алдаа |
 |---|---|---|---|---|---|
-| No constraints | results/transfer-nc.txt | 18 | 0 | 3 / 6 / 7 / 2 | 4 |
-| A2 constraints | results/transfer.txt | 19 | 1 | 18 / 0 / 0 / 0 | 1 |
-| `~` negative values | results/transfer-neg.txt | 22 | 3 | 19 / 0 / 0 / 0 | 1 |
+| Хязгаарлалтгүй | results/transfer-nc.txt | 18 | 0 | 3 / 6 / 7 / 2 | 4 |
+| A2 хязгаарлалттай | results/transfer.txt | 19 | 1 | 18 / 0 / 0 / 0 | 1 |
+| `~` сөрөг утгатай | results/transfer-neg.txt | 22 | 3 | 19 / 0 / 0 / 0 | 1 |
 
-**Reading the output.** Without constraints there is no happy-path row, and 15 of 18 rows contain two or more errors at once. In those rows the first error in my priority order (from -> to -> amount) hides the others, so a row such as Missing + Zero + OverLimit checks only ERROR_NO_FROM and says nothing about the amount rules. Both the constraint version and the `~` version give at most one error per row, so every error is tested alone.
+**Гаралтыг уншсан дүгнэлт.** Хязгаарлалтгүй үед happy-path мөр байхгүй, 18 мөрийн 15 нь нэг дор хоёр ба түүнээс олон алдаатай. Эдгээр мөрөнд миний давуу эрэмбийн (from -> to -> amount) эхний алдаа бусдыг нууна: жишээ нь Missing + Zero + OverLimit мөр зөвхөн ERROR_NO_FROM-ийг шалгаж, дүнгийн дүрмийн талаар юу ч хэлэхгүй. Хязгаарлалттай ба `~` хувилбар хоёулаа нэг мөрөнд хамгийн ихдээ 1 алдаатай тул алдаа бүр дангаараа тестлэгдэнэ.
 
-**Are the A2 constraints still needed with `~`?** Partly. `~` already solves error masking, which was the main job of my [ERROR] constraints, and it also removes combinations such as from = Missing with to = SameAsFrom. It does not remove combinations that are valid in PICT's eyes but meaningless in my design. `ExactLimit` (500) is a boundary value only with the same currency and an empty daily limit: 500 EUR is 600 USD, which is over the limit, and 500 plus 450 already used is also over the limit. So I kept one constraint in `transfer-neg.model` for ExactLimit. `~` replaces the [ERROR] tag, but not the [SINGLE] and [IF] tags.
+**`~` хэрэглэхэд A2-ын хязгаарлалт хэрэгтэй хэвээр үү?** Хэсэгчлэн. `~` нь error masking-ийг шийддэг (миний [ERROR] хязгаарлалтын гол үүрэг), мөн from = Missing ба to = SameAsFrom гэх мэт хослолыг арилгадаг. Харин PICT-ийн үүднээс боломжтой боловч миний дизайнд утгагүй хослолыг арилгадаггүй. `ExactLimit` (500) нь зөвхөн адил валют ба хоосон өдрийн лимитэй үед хилийн утга болно: 500 EUR = 600 USD нь лимитээс хэтэрнэ, мөн 500 дээр аль хэдийн ашигласан 450 нэмэгдвэл бас хэтэрнэ. Тиймээс `transfer-neg.model`-д ExactLimit-ийн нэг хязгаарлалтыг үлдээсэн. `~` нь [ERROR] тэмдэглэгээг орлодог, харин [SINGLE] ба [IF] тэмдэглэгээг орлодоггүй.
 
-**Real test cases.** Common setup: account A (USD, balance 1000, daily limit 500, nothing transferred today), account B (USD, balance 0, active), account F (USD, frozen). Fixed rate 1 EUR = 1.2 USD. Input errors return HTTP 200 with an ERROR result.
+**Бодит тест кейсүүд.** Нийтлэг setup: данс A (USD, үлдэгдэл 1000, өдрийн лимит 500, өнөөдөр шилжүүлэг хийгээгүй), данс B (USD, үлдэгдэл 0, идэвхтэй), данс F (USD, царцаагдсан). Тогтмол ханш 1 EUR = 1.2 USD. Оролтын алдаа HTTP 200 ба ERROR result буцаана.
 
-| # | Source row | Setup | Input body | Oracle |
+| # | Эх мөр | Setup | Оролтын body | Oracle |
 |---|---|---|---|---|
-| T1 (happy path) | `transfer-neg.txt` line 2: Valid, Valid, Normal, Same, Empty | A and B as above | `{"from":"A","to":"B","amount":100,"currency":"USD"}` | 201, `{"result":"OK"}` |
-| T2 (one error) | `transfer-neg.txt` line 7: Valid, Valid, ~OverBalance, Same, Empty | A and B as above | `{"from":"A","to":"B","amount":2000,"currency":"USD"}` | 200, `{"result":"ERROR_INSUFFICIENT"}` (2000 > balance 1000) |
-| T3 (one error) | `transfer-neg.txt` line 13: Valid, ~SameAsFrom, Normal, Different, Empty | A as above | `{"from":"A","to":"A","amount":100,"currency":"EUR"}` | 200, `{"result":"ERROR_SAME_ACCOUNT"}` |
-| T4 (multi-error) | `transfer-nc.txt` line 7: Frozen, SameAsFrom, Zero, Same, AlmostFull | F is frozen, 450 already transferred today | `{"from":"F","to":"F","amount":0,"currency":"USD"}` | 200, `{"result":"ERROR_FROZEN"}` |
+| T1 (happy path) | `transfer-neg.txt` 2-р мөр: Valid, Valid, Normal, Same, Empty | A ба B дээрх шиг | `{"from":"A","to":"B","amount":100,"currency":"USD"}` | 201, `{"result":"OK"}` |
+| T2 (нэг алдаа) | `transfer-neg.txt` 7-р мөр: Valid, Valid, ~OverBalance, Same, Empty | A ба B дээрх шиг | `{"from":"A","to":"B","amount":2000,"currency":"USD"}` | 200, `{"result":"ERROR_INSUFFICIENT"}` (2000 > үлдэгдэл 1000) |
+| T3 (нэг алдаа) | `transfer-neg.txt` 13-р мөр: Valid, ~SameAsFrom, Normal, Different, Empty | A дээрх шиг | `{"from":"A","to":"A","amount":100,"currency":"EUR"}` | 200, `{"result":"ERROR_SAME_ACCOUNT"}` |
+| T4 (олон алдаа) | `transfer-nc.txt` 7-р мөр: Frozen, SameAsFrom, Zero, Same, AlmostFull | F царцаагдсан, өнөөдөр 450 шилжүүлсэн | `{"from":"F","to":"F","amount":0,"currency":"USD"}` | 200, `{"result":"ERROR_FROZEN"}` |
 
-T4 has four errors at once (frozen, same account, bad amount, and a limit problem). By my priority order from -> to -> amount, the from check comes first, so the oracle is ERROR_FROZEN. This row only checks that ordering and says nothing about the other three errors.
+T4 нь нэг дор дөрвөн алдаатай (царцаагдсан, ижил данс, буруу дүн, лимитийн асуудал). Миний from -> to -> amount давуу эрэмбээр from шалгалт түрүүлэх тул oracle нь ERROR_FROZEN. Энэ мөр зөвхөн эрэмбийг шалгах бөгөөд бусад гурван алдааны талаар юу ч хэлэхгүй.
 
-### B3. Conclusion
+### B3. Дүгнэлт
 
-Manual category-partition produced 15 specifications (216 -> 12 plus 3 extra cases), and every row has an expected result written next to it. PICT produced 19 rows with hand-written constraints and 22 rows with `~`, but its output has no expected results, so I had to add the oracle for every row myself. The manual table captures error semantics better: each error class has its own row, and my priority order decides the double-condition rows. The `~` model comes close, because it limits each row to one error, but PICT still does not know which ERROR_ code should be returned. PICT guarantees pairwise coverage for the values I give it, and my manual table does not: for example, I never checked every pair of currency and from. With `~`, the pair coverage of error values with each other is deliberately dropped, so the guarantee holds only for pairs of normal values and for each error with the normal values. The unconstrained model showed why constraints matter: it had no happy-path row and 15 of 18 rows had two or more errors. PICT is also greedy, so it gave 10 rows for the browser model where 9 are enough, and its sets are not always minimal. The manual work and PICT complement each other: PICT is faster and systematic, the manual design gives meaning to the tests. The step that needed the most thinking was A2, deciding which values are [ERROR], [SINGLE] or [IF] and the priority order, because the PICT models and the oracles all depend on it.
+Гараар хийсэн category-partition 15 спецификаци (216 -> 12 дээр нэмэлт 3 тохиолдол) гаргасан бөгөөд мөр бүрийн хажууд хүлээгдэх үр дүн бичигдсэн. PICT хязгаарлалттай үед 19, `~`-тэй үед 22 мөр гаргасан боловч гаралтад хүлээгдэх үр дүн байхгүй тул мөр бүрийн oracle-ыг би өөрөө нэмэх шаардлагатай болсон. Алдааны семантикийг гараар хийсэн хүснэгт илүү сайн барьдаг: алдааны анги бүр тусдаа мөртэй, давхар нөхцөлийн мөрийг миний давуу эрэмб шийддэг. `~` модель нь мөр бүрийг нэг алдаатай болгодог тул ойрхон ч аль ERROR_ код буцахыг PICT мэдэхгүй. PICT нь өгсөн утгуудынхаа хувьд хосын хамралтыг баталгаажуулдаг, харин миний гар хүснэгт үүнийг баталгаажуулдаггүй: жишээ нь currency ба from-ийн хос бүрийг би шалгаагүй. `~`-тэй үед алдааны утгуудын хоорондын хосын хамралтыг зориуд орхидог тул баталгаа нь зөвхөн хэвийн утгуудын хос болон алдаа бүр хэвийн утгуудтай хосолсон тохиолдолд хүчинтэй. Хязгаарлалтгүй модель хязгаарлалт яагаад чухал болохыг харуулсан: happy-path мөр байгаагүй, 18 мөрийн 15 нь хоёр ба түүнээс олон алдаатай. PICT greedy тул browser моделд 9 хангалттай байтал 10 мөр гаргасан, иймээс түүний олонлог үргэлж хамгийн цөөн байдаггүй. Гар ажил ба PICT бие биенээ нөхдөг: PICT хурдан бөгөөд системтэй, харин гар дизайн тестэд утга учир өгдөг. Хамгийн их бодол шаардсан алхам нь A2 байсан, учир нь аль утга [ERROR], [SINGLE], [IF] болох ба давуу эрэмбийг тогтоох нь PICT моделууд болон oracle бүхэнд нөлөөлдөг.
