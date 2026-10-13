@@ -83,7 +83,16 @@ Rows 1-12 are the 12 tests from the count above. Rows 13-15 are extra interestin
 
 ### B1. Browser model
 
-TODO after running PICT: 2-way row count, 3-way row count, comparison with 144, greedy explanation (2-3 sentences).
+Model: `browser.model`. Row counts (header line excluded, counted with `tail -n +2 ... | wc -l`):
+
+| Strength | File | Rows |
+|---|---|---|
+| 2-way | results/browser-2way.txt | 10 |
+| 3-way | results/browser-3way.txt | 20 |
+
+**2-way:** PICT gave 10 rows, one more than the 9 rows found by hand in the lecture. 9 is the minimum possible, because Content and Cookies have 3 values each, so there are 9 distinct pairs and one row covers only one of them. PICT uses a greedy algorithm: at each step it adds the row that covers the most uncovered pairs. That is fast and gives a small set, but a locally best choice does not always lead to the smallest overall set, so PICT does not guarantee the minimum.
+
+**3-way:** 20 rows, compared with the full set of 3 x 3 x 2 x 2 x 2 x 2 = 144 combinations, which is about 14% of the full set.
 
 ### B2. Transfer models
 
