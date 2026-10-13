@@ -1,0 +1,14 @@
+From:      Valid, Frozen, Missing
+To:        Valid, Missing, SameAsFrom
+Amount:    Normal, ExactLimit, Zero, Negative, OverBalance, OverLimit
+Currency:  Same, Different
+DailyUsed: Empty, AlmostFull
+
+# [ERROR] values: every error is tested alone, everything else valid
+IF [From] <> "Valid" THEN [To] = "Valid" AND [Amount] = "Normal" AND [DailyUsed] = "Empty";
+IF [To] <> "Valid" THEN [From] = "Valid" AND [Amount] = "Normal" AND [DailyUsed] = "Empty";
+IF [Amount] IN {"Zero", "Negative", "OverBalance", "OverLimit"} THEN [From] = "Valid" AND [To] = "Valid" AND [DailyUsed] = "Empty";
+IF [DailyUsed] = "AlmostFull" THEN [From] = "Valid" AND [To] = "Valid" AND [Amount] = "Normal";
+
+# [SINGLE]: the boundary value needs exactly one clean test
+IF [Amount] = "ExactLimit" THEN [From] = "Valid" AND [To] = "Valid" AND [Currency] = "Same" AND [DailyUsed] = "Empty";
